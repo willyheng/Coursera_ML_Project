@@ -1,0 +1,139 @@
+---
+title: "R Notebook"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+# Download data files
+
+```{r}
+if (!file.exists("pml-training.csv")) {
+  fileUrl<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(fileUrl, "pml-training.csv", method="curl")
+
+  fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(fileUrl, "pml-testing.csv", method="curl")
+}
+
+library(dplyr)
+library(caret)
+
+```
+
+# Read data
+
+```{r}
+nachar = c("NA", "", "#DIV/0!")
+training_raw <- read.csv("pml-training.csv", stringsAsFactors=FALSE, na.strings = nachar)
+testing_raw <- read.csv("pml-testing.csv", stringsAsFactors=FALSE, na.strings = nachar)
+```
+
+# Data cleaning
+
+## Remove columns with all na
+
+As the first step of cleaning data, we remove empty columns, as well as other columns which are not used in the prediction such as user name
+
+```{r}
+training_raw <- training_raw[,!apply(is.na(training_raw), 2, all)]
+
+exclude <- c("X", "num_window", "user_name", "raw_timestamp_part_1", 
+             "raw_timestamp_part_2", "cvtd_timestamp", "new_window")
+training <- training_raw %>%
+  dplyr::select(-one_of(exclude))
+```
+
+## Remove columns with lack of data
+
+As some of the columns have very low frequency of data, they would not be useful to our prediction, hence we remove them
+
+```{r}
+dataCount <- sapply(training, function(x) sum(!is.na(x)))
+training <- training[, which(dataCount > 1000)]
+```
+
+## Remove unnecessary columns in testing dataframe
+
+Next we ensure that all the corresponding columns in the test set is also removed
+
+```{r}
+testing <- testing_raw[, names(testing_raw) %in% names(training)]
+```
+
+## Convert data type
+
+We then convert all the data to numeric, as the objective column as factor
+
+```{r}
+training <- training %>% 
+  mutate_if(is.integer, as.numeric) %>%
+  mutate(classe = as.factor(classe)) %>%
+  na.omit
+
+testing <- testing %>%
+  mutate_if(is.integer, as.numeric) 
+```
+
+# Break into training and cross validation set
+
+```{r}
+inTrain <- createDataPartition(training$classe, p = 0.8)[[1]]
+cvset <- training[-inTrain,]
+training <- training[ inTrain,]
+```
+
+# Training
+
+## Calculate principal components
+
+Due to the large number of predictive variables, it would be more efficient to use principal component analysis to reduce the number of factors in the predictive model. From the plot, we see that 5 factors explain about 60% of the variance. We will start with 5 factors so that training will not take too long, if the results are poor, we can then include more factors.
+
+```{r}
+components <- prcomp(training[,-ncol(training)], scale=TRUE)
+propExplained <- cumsum(components$sdev**2/sum(components$sdev**2))
+plot(propExplained, main="Prop of Variance explained by PC",
+     xlab = "PC", ylab = "%", type="l")
+```
+
+
+## Use up to PC5 to train 
+
+We preprocess the data to extract the 5 principal components, then pass it through an Linear Discriminant Analysis, a model for multiclass classification.
+
+```{r}
+set.seed(62433)
+preProc <- preProcess(training, method="pca", pcaComp=5)
+trainPC <- predict(preProc, training)
+
+modelFit <- train(x = trainPC[,-1], y=training$classe, model="lda")
+```
+
+# Predict for Train (In sample results)
+
+We see that the in sample training yields great results, with the accuracy being a whooping 100%
+
+```{r}
+predictTrain <- predict(modelFit, trainPC)
+confusionMatrix(training$classe, predictTrain)
+```
+
+# Cross validation
+
+Next we perform a cross validation to check for overfitting. We can see there's a fair bit of overfitting as the accuracy of the cross validation set is only 84%, not quite close to the 100% obtained on the training set
+
+```{r}
+cvPC <- predict(preProc, cvset)
+predictCv <- predict(modelFit, cvPC)
+confusionMatrix(cvset$classe, predictCv)
+```
+
+# Predict test sets
+
+Finally we predict the test sets and submit the results!
+
+```{r}
+testPC <- predict(preProc, testing)
+predictTest <- predict(modelFit, testPC)
+data.frame(qn = 1:20, predictTest = predictTest)
+```
