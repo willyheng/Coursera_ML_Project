@@ -3,6 +3,7 @@ title: "R Notebook"
 output:
   html_document: default
   html_notebook: default
+keep_md: yes
 ---
 
 # Download data files
@@ -101,7 +102,7 @@ plot(propExplained, main="Prop of Variance explained by PC",
 
 We preprocess the data to extract the 5 principal components, then pass it through an Linear Discriminant Analysis, a model for multiclass classification.
 
-```{r}
+```{r, cache = TRUE}
 set.seed(62433)
 preProc <- preProcess(training, method="pca", pcaComp=5)
 trainPC <- predict(preProc, training)
