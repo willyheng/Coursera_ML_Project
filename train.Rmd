@@ -129,6 +129,13 @@ predictCv <- predict(modelFit, cvPC)
 confusionMatrix(cvset$classe, predictCv)
 ```
 
+## Cross validation set error
+
+```{r}
+cv_error <- mean(predictCv == cvset$classe)
+sprintf("Cross validation set error = %.2f%%", (1-cv_error)*100)
+```
+
 # Predict test sets
 
 Finally we predict the test sets and submit the results!
