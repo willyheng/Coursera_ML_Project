@@ -1,9 +1,10 @@
 ---
 title: "R Notebook"
 output:
-  html_document: default
+  md_document:
+    variant: markdown_github
   html_notebook: default
-keep_md: yes
+  html_document: default
 ---
 
 # Download data files
